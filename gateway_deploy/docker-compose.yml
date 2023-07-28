@@ -1,0 +1,80 @@
+version: '3'
+services:
+  textin-gateway-postgres:
+    image: registry.intsig.net/textin_gateway/base/${DATABASE_IMAGE}
+    container_name: textin-gateway-postgres
+    restart: always
+    ports:
+      - "5432:5432"
+    volumes:
+      - ${DB_PREFIX}/data/postgres:/var/lib/postgresql/data
+      - ${CONFIG_PATH}/init/postgres:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d gateway" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    environment:
+      POSTGRES_USER: ${DATABASE_USER}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_DB: ${DATABASE_DB}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    networks:
+      - gateway
+
+  textin-gateway-control-panel:
+    image: registry.intsig.net/textin_gateway/${CONTROL_PANEL_IMAGE}
+    container_name: textin-gateway-control-panel
+    restart: always
+    volumes:
+      - ${CONFIG_PATH}/conf/control-panel/config.yaml:/usr/local/apisix/conf/config.yaml:ro
+      - ${DB_PREFIX}/apisix.yaml:/usr/local/apisix/conf/apisix.yaml:ro
+      - ${CONFIG_PATH}/plugins/body-logger.lua:/usr/local/apisix/apisix/plugins/body-logger.lua:ro
+      - ${CONFIG_PATH}/plugins/postgresql-logger.lua:/usr/local/apisix/apisix/plugins/postgresql-logger.lua:ro
+      - ${CONFIG_PATH}/plugins/request-body-hooker.lua:/usr/local/apisix/apisix/plugins/request-body-hooker.lua:ro
+      - ${DB_PREFIX}/logs/control-panel/access.log:/usr/local/apisix/logs/access.log
+      - ${DB_PREFIX}/logs/control-panel/error.log:/usr/local/apisix/logs/error.log
+      - ${DB_PREFIX}/logs/body-logger:/data/body-logger
+    ports:
+      - "${CONTROL_PANEL_PORT}:9080/tcp"
+    networks:
+      - gateway
+
+  textin-gateway-data-panel:
+    image: registry.intsig.net/textin_gateway/${DATA_PANEL_IMAGE}
+    container_name: textin-gateway-data-panel
+    restart: always
+    volumes:
+      - ${CONFIG_PATH}/conf/data-panel/api-server.yaml:/app/configs/api-server.yaml
+      - ${DB_PREFIX}/init-route.yaml:/app/configs/init-route.yaml
+      - ${DB_PREFIX}/apisix.yaml:/data/apisix.yaml
+      - ${DB_PREFIX}/logs/body-logger:/data/body-logger:ro
+    ports:
+      - "8080:8080"
+    depends_on:
+      textin-gateway-control-panel:
+        condition: service_started
+      textin-gateway-postgres:
+        condition: service_healthy
+    environment:
+      # 这里左边环境变量要 ROUTE 开头 ADDRESS 结尾
+      ROUTE_GATEWAY_WEB_ADDRESS: ${ROUTE_GATEWAY_WEB_ADDRESS}
+      ROUTE_GATEWAY_BACKEND_ADDRESS: ${ROUTE_GATEWAY_BACKEND_ADDRESS}
+    networks:
+      - gateway
+
+  textin-gateway-web:
+    image: registry.intsig.net/textin_gateway/${WEB_IMAGE}
+    container_name: textin-gateway-web
+    restart: always
+    ports:
+      - "32380:80"
+    depends_on:
+      - textin-gateway-data-panel
+    networks:
+      - gateway
+
+networks:
+  gateway:
+    name: gateway-network
+    driver: bridge

@@ -1,0 +1,58 @@
+server:
+  version: v2.1.2.20230718
+  host: 0.0.0.0
+  port: 8080
+  mode: debug
+  domain: http://192.168.60.73:8080
+  health: true   # 健康检查
+  language: en  # 国际化 en zh
+  middlewares: ginZap,recovery,cors    # 加载中间件列表
+  maxPingCount:   # 服务器启动后，尝试检查次数
+
+control:
+  host: textin-gateway-control-panel
+  body-logger-dir: /data/body-logger
+  config: /data/apisix.yaml
+
+db:
+  type: postgresql
+  host: textin-gateway-postgres
+  port: 5432
+  username: postgres
+  password: postgres
+  database: gateway
+  max-idle-connections: 100 # PostgreSQL 最大空闲连接数，默认 100
+  max-open-connections: 100 # PostgreSQL 最大打开的连接数，默认 100
+  max-connection-life-time: 10s # 空闲连接最大存活时间，默认 10s
+  log-level: 4 # GORM log level, 1: silent, 2:error, 3:warn, 4:info
+
+feature: # 额外功能
+  metrics: false # 开启 metrics, router:  /metrics
+  profiling: false # 开启性能分析, 可以通过 <host>:<port>/debug/pprof/地址查看程序栈、线程等系统信息，默认值为 true
+  body-logger: true # 默认开启请求体日志记录功能，数据是否保存在 logs/body-logger 目录下
+  captcha: false # 开启图片验证码功能
+  password-encrypt: false # 当改值为 true 配置文件里所有是密码的配置都要加密
+  account-expiry-time: 0 # 账户多久未登录账号变为被禁用，设置为 0 则永不过期，配置格式：240h/0
+  account-pw-expiry-time: 720h # 密码过期时间(小时)，配置格式：240h
+  account-lock: false # 开启账号锁定功能
+  account-retry-time: 60s # 60s 密码登录短时间内重试时间(秒)，配置格式：60s/1m/1h
+  account-retry-count: 3 # 密码登录短时间内重试错误次数
+  account-lock-time: 60s # 锁定时间(秒)，当在一分钟内连续输入三次错误密码，则禁用锁定 5s，设置为 0 则永久禁用，配置格式：60s/0
+  api-image-base64: true # 是否支持 Base64 可以请求 api 的功能
+
+log:
+  name: gateway # Logger日志的名字
+  development: true # 如果是开发模式，会对DPanicLevel进行堆栈跟踪。
+  level: debug #debug, info, warn, error, dpanic, panic, fatal。
+  format: console # 支持的日志输出格式，目前支持console和json两种。console其实就是text格式。
+  enable-color: true # 是否开启颜色输出，true:是，false:否
+  disable-caller: false # 是否开启 caller，如果开启会在日志中显示调用日志所在的文件、函数和行号
+  disable-stacktrace: false # 是否再panic及以上级别禁止打印堆栈信息
+  output-paths: stdout # 支持输出到多个输出，逗号分开。支持输出到标准输出（stdout）和文件。
+  error-output-paths: # zap内部(非业务)错误日志输出路径，多个输出，逗号分开
+
+jwt:
+  iss: "textin-gateway"
+  realm: JWT # jwt 标识
+  key: 2a3846dbf88c44d3866511c4b3b31926
+  timeout: 24h # token 过期时间, 支持配置小时和分钟，配置格式：24h\30m

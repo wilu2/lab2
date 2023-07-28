@@ -1,0 +1,54 @@
+FROM debian:bullseye-slim
+
+ARG APISIX_VERSION=3.3.0
+
+RUN set -ex; \
+    arch=$(dpkg --print-architecture); \
+    apt update; \
+    apt-get -y install --no-install-recommends wget gnupg ca-certificates curl gcc luarocks; \
+    codename=`grep -Po 'VERSION="[0-9]+ \(\K[^)]+' /etc/os-release`; \
+    wget -O - https://openresty.org/package/pubkey.gpg | apt-key add -; \
+    case "${arch}" in \
+    amd64) \
+    echo "deb https://openresty.org/package/debian $codename openresty" | tee /etc/apt/sources.list.d/openresty.list \
+    && wget -O - https://repos.apiseven.com/pubkey.gpg | apt-key add - \
+    && echo "deb https://repos.apiseven.com/packages/debian $codename main" | tee /etc/apt/sources.list.d/apisix.list \
+    ;; \
+    arm64) \
+    echo "deb https://openresty.org/package/arm64/debian $codename openresty" | tee /etc/apt/sources.list.d/openresty.list \
+    && wget -O - https://repos.apiseven.com/pubkey.gpg | apt-key add - \
+    && echo "deb https://repos.apiseven.com/packages/arm64/debian $codename main" | tee /etc/apt/sources.list.d/apisix.list \
+    ;; \
+    esac; \
+    apt update \
+    && apt install -y apisix=${APISIX_VERSION}-0 \
+    && apt-get purge -y --auto-remove \
+    && rm -f /etc/apt/sources.list.d/openresty.list /etc/apt/sources.list.d/apisix.list \
+    && openresty -V \
+    && apisix version
+
+WORKDIR /usr/local/apisix
+
+ENV PATH=$PATH:/usr/local/openresty/luajit/bin:/usr/local/openresty/nginx/sbin:/usr/local/openresty/bin
+
+RUN luarocks install pgmoon
+
+ENV TZ Asia/Shanghai
+
+RUN useradd -u 1001 apisix && chown -R apisix:apisix /usr/local/apisix
+
+USER apisix
+
+# forward request and error logs to docker log collector
+RUN ln -sf /dev/stdout /usr/local/apisix/logs/access.log \
+    && ln -sf /dev/stderr /usr/local/apisix/logs/error.log
+
+EXPOSE 9080 9443
+
+COPY ./docker-entrypoint.sh /docker-entrypoint.sh
+
+ENTRYPOINT ["/docker-entrypoint.sh"]
+
+CMD ["docker-start"]
+
+STOPSIGNAL SIGQUIT
